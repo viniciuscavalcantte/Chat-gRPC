@@ -102,5 +102,5 @@ if __name__ == '__main__':
     sender1 = "Alice"
     sender2 = "Bob"
 
-    # Inicia o chat
+   
     start_chat(port1, port2, sender1, sender2)
