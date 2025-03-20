@@ -14,6 +14,7 @@ class ChatServer(chat_pb2_grpc.ChatServiceServicer):
     def SendMessage(self, request, context):
         with self.lock:
             self.messages.append(request)
+            print(f"Mensagem recebida de {request.sender}: {request.content}")  # Log de mensagem recebida
         return chat_pb2.Empty()
 
     def ReceiveMessage(self, request, context):
@@ -42,7 +43,11 @@ def send_message(stub, sender):
         if content.lower() == 'sair':
             break
         message = chat_pb2.Message(sender=sender, content=content)
-        stub.SendMessage(message)
+        try:
+            stub.SendMessage(message)
+            print(f"Mensagem enviada para o outro nó: {content}")  # Log de mensagem enviada
+        except grpc.RpcError as e:
+            print(f"Erro ao enviar mensagem: {e}")
 
 # Função para receber mensagens
 def receive_messages(stub):
@@ -55,52 +60,48 @@ def receive_messages(stub):
             time.sleep(5)
 
 # Função principal para iniciar o chat
-def start_chat(port1, port2, sender1, sender2):
-    # Inicia o servidor para o primeiro nó
-    server_thread1 = threading.Thread(target=start_server, args=(port1,))
-    server_thread1.daemon = True
-    server_thread1.start()
+def start_chat(port, target_port, sender):
+    # Inicia o servidor em uma thread separada
+    server_thread = threading.Thread(target=start_server, args=(port,))
+    server_thread.daemon = True
+    server_thread.start()
 
-    # Inicia o servidor para o segundo nó
-    server_thread2 = threading.Thread(target=start_server, args=(port2,))
-    server_thread2.daemon = True
-    server_thread2.start()
-
-    # Aguarda os servidores iniciarem
+    # Aguarda o servidor iniciar
     time.sleep(2)
 
-    # Conecta o primeiro nó ao segundo
-    channel1 = grpc.insecure_channel(f'localhost:{port2}')
-    stub1 = chat_pb2_grpc.ChatServiceStub(channel1)
-
-    # Conecta o segundo nó ao primeiro
-    channel2 = grpc.insecure_channel(f'localhost:{port1}')
-    stub2 = chat_pb2_grpc.ChatServiceStub(channel2)
+    # Conecta ao outro nó com reconexão automática
+    while True:
+        try:
+            print(f"Tentando conectar ao nó na porta {target_port}...")
+            channel = grpc.insecure_channel(f'localhost:{target_port}')
+            stub = chat_pb2_grpc.ChatServiceStub(channel)
+            # Testa a conexão
+            stub.SendMessage(chat_pb2.Message(sender=sender, content="Testando conexão..."))
+            print(f"Conectado ao nó na porta {target_port}")
+            break
+        except grpc.RpcError as e:
+            print(f"Erro ao conectar ao nó na porta {target_port}: {e}. Tentando novamente em 5 segundos...")
+            time.sleep(5)
 
     # Inicia as threads para enviar e receber mensagens
-    send_thread1 = threading.Thread(target=send_message, args=(stub1, sender1))
-    receive_thread1 = threading.Thread(target=receive_messages, args=(stub1,))
+    send_thread = threading.Thread(target=send_message, args=(stub, sender))
+    receive_thread = threading.Thread(target=receive_messages, args=(stub,))
 
-    send_thread2 = threading.Thread(target=send_message, args=(stub2, sender2))
-    receive_thread2 = threading.Thread(target=receive_messages, args=(stub2,))
+    send_thread.start()
+    receive_thread.start()
 
-    send_thread1.start()
-    receive_thread1.start()
-    send_thread2.start()
-    receive_thread2.start()
-
-    send_thread1.join()
-    receive_thread1.join()
-    send_thread2.join()
-    receive_thread2.join()
+    send_thread.join()
+    receive_thread.join()
 
 # Ponto de entrada do programa
 if __name__ == '__main__':
-    # Define as portas e os nomes dos usuários
-    port1 = 50051
-    port2 = 50052
-    sender1 = "Alice"
-    sender2 = "Bob"
+    import sys
+    if len(sys.argv) != 4:
+        print("Uso: python chat.py <porta_local> <porta_destino> <nome_usuario>")
+        sys.exit(1)
 
-   
-    start_chat(port1, port2, sender1, sender2)
+    port = int(sys.argv[1])
+    target_port = int(sys.argv[2])
+    sender = sys.argv[3]
+
+    start_chat(port, target_port, sender)
