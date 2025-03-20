@@ -45,16 +45,16 @@ Para gerar os arquivos a partir do arquivo `chat.proto`, rode:
 python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. chat.proto
 ```
 
-### 4️⃣ Execute o servidor:
-Para iniciar o servidor na porta 50051, execute:
+### 4️⃣ Como testar, Terminal 1 (Alice):
+Para iniciar o servidor na porta 50051, no terminal 1 execute:
 ```bash
-python chat.py --server
+python chat.py 50051 50052 Alice 
 ```
 
-### 5️⃣ Execute o cliente (em outro terminal):
-Para iniciar um cliente com o nome "Alice":
+### 5️⃣ Terminal 2 (Bob):
+Execute
 ```bash
-python chat.py --client --name Alice
+python chat.py 50052 50051 Bob
 ```
 
 ### 💡 Enviando Mensagens
